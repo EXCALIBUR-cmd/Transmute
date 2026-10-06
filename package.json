@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx --env-file=.env.local src/seed/run.ts",
-    "verify": "tsx --env-file=.env.local src/seed/verify.ts"
+    "verify": "tsx --env-file=.env.local src/seed/verify.ts",
+    "test:schema": "tsx src/test/schema.test.ts"
   },
   "dependencies": {
     "mongoose": "^9.11.0",

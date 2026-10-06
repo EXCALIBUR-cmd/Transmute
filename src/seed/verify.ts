@@ -1,14 +1,3 @@
-/**
- * Verification script — validates all success criteria for Loop 1.
- *
- * Checks:
- * 1. Source customer count ≈ 50
- * 2. No duplicate source IDs
- * 3. Target users count = 0
- * 4. Invalid fixtures exist (bad emails, nulls, bad dates, bad phones)
- * 5. A normal record can be retrieved
- * 6. Records can be fetched and inspected
- */
 
 import "dotenv/config";
 import mongoose from "mongoose";
@@ -33,7 +22,6 @@ async function verify(): Promise<void> {
     if (!passed) allPassed = false;
   }
 
-  // 1. Source count
   const sourceCount = await Customer.countDocuments();
   check(
     "Source customer count ≈ 50",
@@ -41,7 +29,6 @@ async function verify(): Promise<void> {
     `Count: ${sourceCount}`
   );
 
-  // 2. No duplicate IDs
   const allIds = await Customer.find({}, { id: 1, _id: 0 }).lean();
   const idSet = new Set(allIds.map((r) => r.id));
   check(
@@ -50,7 +37,6 @@ async function verify(): Promise<void> {
     `Unique: ${idSet.size}, Total: ${allIds.length}`
   );
 
-  // 3. Target count
   const db = mongoose.connection.db;
   let targetCount = 0;
   if (db) {
@@ -61,19 +47,17 @@ async function verify(): Promise<void> {
   }
   check("Target users count = 0", targetCount === 0, `Count: ${targetCount}`);
 
-  // 4. Normal record retrieval
   const normalRecord = await Customer.findOne({ id: "CUST-001" }).lean();
   check(
     "Normal record retrievable (CUST-001)",
     normalRecord !== null &&
-      normalRecord.first_name === "Aarav" &&
-      normalRecord.last_name === "Sharma",
+    normalRecord.first_name === "Aarav" &&
+    normalRecord.last_name === "Sharma",
     normalRecord
       ? `${normalRecord.first_name} ${normalRecord.last_name}`
       : "NOT FOUND"
   );
 
-  // 5. Invalid email fixture
   const badEmail = await Customer.findOne({ id: "CUST-041" }).lean();
   check(
     "Invalid email fixture exists (CUST-041)",
@@ -81,7 +65,6 @@ async function verify(): Promise<void> {
     badEmail ? `email: "${badEmail.email}"` : "NOT FOUND"
   );
 
-  // 6. Null field fixture
   const nullEmail = await Customer.findOne({ id: "CUST-045" }).lean();
   check(
     "Null email fixture exists (CUST-045)",
@@ -103,7 +86,6 @@ async function verify(): Promise<void> {
     nullDob ? `date_of_birth: ${nullDob.date_of_birth}` : "NOT FOUND"
   );
 
-  // 7. Invalid date fixture
   const badDate = await Customer.findOne({ id: "CUST-048" }).lean();
   check(
     "Invalid date_of_birth fixture exists (CUST-048)",
@@ -111,7 +93,6 @@ async function verify(): Promise<void> {
     badDate ? `date_of_birth: "${badDate.date_of_birth}"` : "NOT FOUND"
   );
 
-  // 8. Invalid phone fixture
   const badPhone = await Customer.findOne({ id: "CUST-049" }).lean();
   check(
     "Invalid phone fixture exists (CUST-049)",
@@ -119,14 +100,13 @@ async function verify(): Promise<void> {
     badPhone ? `phone: "${badPhone.phone}"` : "NOT FOUND"
   );
 
-  // 9. Multi-issue fixture
   const multiIssue = await Customer.findOne({ id: "CUST-050" }).lean();
   check(
     "Multi-issue fixture exists (CUST-050)",
     multiIssue !== null &&
-      multiIssue.email === null &&
-      multiIssue.phone === "???" &&
-      multiIssue.date_of_birth === "1985-13-45",
+    multiIssue.email === null &&
+    multiIssue.phone === "???" &&
+    multiIssue.date_of_birth === "1985-13-45",
     multiIssue
       ? `email: ${multiIssue.email}, phone: "${multiIssue.phone}", dob: "${multiIssue.date_of_birth}"`
       : "NOT FOUND"
