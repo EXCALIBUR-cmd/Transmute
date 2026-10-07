@@ -9,9 +9,11 @@
     "lint": "eslint",
     "seed": "tsx --env-file=.env.local src/seed/run.ts",
     "verify": "tsx --env-file=.env.local src/seed/verify.ts",
-    "test:schema": "tsx src/test/schema.test.ts"
+    "test:schema": "tsx src/test/schema.test.ts",
+    "test:mapping": "tsx --env-file=.env.local src/test/mapping.test.ts"
   },
   "dependencies": {
+    "@google/genai": "^2.27.0",
     "mongoose": "^9.11.0",
     "next": "16.3.8",
     "react": "19.2.8",
