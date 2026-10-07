@@ -42,7 +42,7 @@ export async function generateMappingProposal(
     }
 
     const modelName =
-      options?.model || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+      options?.model || process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
 
     const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
 
