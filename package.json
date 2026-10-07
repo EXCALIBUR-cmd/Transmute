@@ -10,7 +10,8 @@
     "seed": "tsx --env-file=.env.local src/seed/run.ts",
     "verify": "tsx --env-file=.env.local src/seed/verify.ts",
     "test:schema": "tsx src/test/schema.test.ts",
-    "test:mapping": "tsx --env-file=.env.local src/test/mapping.test.ts"
+    "test:mapping": "tsx --env-file=.env.local src/test/mapping.test.ts",
+    "test:plan": "tsx --env-file=.env.local src/test/plan.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.27.0",
