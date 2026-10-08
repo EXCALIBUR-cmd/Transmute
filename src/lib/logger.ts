@@ -5,11 +5,18 @@ export type WorkflowLogEvent =
   | "mapping_plan_fetch_failed"
   | "migration_dry_run_started"
   | "migration_dry_run_completed"
-  | "migration_dry_run_failed";
+  | "migration_dry_run_failed"
+  | "migration_execution_started"
+  | "migration_record_migrated"
+  | "migration_record_quarantined"
+  | "migration_record_failed"
+  | "migration_execution_completed"
+  | "migration_execution_failed";
 
 export interface WorkflowLogPayload {
   event: WorkflowLogEvent;
   planId?: string;
+  runId?: string;
   sourceCollection?: string;
   targetCollection?: string;
   mappingCount?: number;
@@ -19,6 +26,12 @@ export interface WorkflowLogPayload {
   totalRecords?: number;
   validCount?: number;
   invalidCount?: number;
+  migratedCount?: number;
+  quarantinedCount?: number;
+  failedCount?: number;
+  sourceId?: string;
+  targetId?: string;
+  category?: string;
   durationMs?: number;
   timestamp?: string;
 }

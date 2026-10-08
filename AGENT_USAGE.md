@@ -253,3 +253,119 @@ Live Runtime Dry-Run Verification (http://localhost:3000):
 - Post-check: source_customers = 50, target_users = 0
 ```
 
+---
+
+## Retrospective — LOOP 6: Deterministic Migration Execution & Migration Run Persistence
+
+### Human Engineering Work
+- Defined architectural boundary for Loop 6: this is the first loop where `target_users` receives real writes; `source_customers` must remain strictly read-only.
+- Mandated that execution authority belongs exclusively to approved `MappingPlan` records: pending and rejected plans must be rejected with HTTP 409 Conflict.
+- Strictly prohibited LLM / Gemini involvement during execution: transformations and target schema validations must be application-owned and deterministic.
+- Defined migration run persistence requirements: backed by a dedicated `migration_runs` collection retaining status, total, migrated, quarantined, and failure counts, timestamps, and record-level outcomes.
+- Established target write safety policy: upsert keyed by `user_id` with in-run collision tracking (`seenTargetIds`), preventing duplicate logical users and capturing write errors without silently aborting the run.
+- Established regression test ordering: mandated running all tests asserting `target_users = 0` BEFORE the live migration demonstration, followed by runtime execution, and verifying `target_users = 43` and `source_customers = 50` thereafter without resetting the database.
+- Executed manual runtime verification commands and validated target documents (`CUST-001`, `CUST-002`, `CUST-040`) and quarantine enforcement (`CUST-041`–`CUST-044`, `CUST-048`, `CUST-049`, `CUST-050`).
+- Formally accepted Loop 6 execution layer.
+
+### Agent-Assisted Implementation Work
+- Defined data contracts in `src/types/execution.ts` for `ExecutionStatus`, `ExecutionOutcomeStatus`, `ExecutionFailureCategory`, `RecordExecutionOutcome`, `MigrationExecutionStatistics`, and `MigrationExecutionResult`.
+- Created Mongoose model `src/models/MigrationRun.ts` mapped to `migration_runs` collection with structured status enums, timestamps, and embedded record outcomes.
+- Extended structured workflow logging in `src/lib/logger.ts` for execution events (`migration_execution_started`, `migration_record_migrated`, `migration_record_quarantined`, `migration_record_failed`, `migration_execution_completed`, `migration_execution_failed`).
+- Implemented deterministic execution engine in `src/lib/migration/execute.ts` reusing Loop 5 transformations and target schema validation, with in-memory validation prior to write, quarantine classification for invalid records, and `user_id` upsert write semantics.
+- Created API endpoint `POST /api/migration/execute` in `src/app/api/migration/execute/route.ts` enforcing approval state boundaries (rejecting non-approved plans with HTTP 409).
+- Created comprehensive test suite in `src/test/execution.test.ts` covering 15 test scenarios and added `"test:execution"` script to `package.json`.
+- Created live runtime verification script in `src/test/runtime-execution.ts` executing the real migration workflow and asserting MongoDB state before and after.
+
+### Corrections / Rejected Approaches
+- Phone Number Fixture Assertion in Tests: In `src/test/execution.test.ts`, the expected phone number for `CUST-001` was initially asserted as an Indian phone number format, whereas the deterministic seed fixture contained `"+1-555-0101"`. Corrected the assertion to match the actual seed data.
+- Duplicate Identity Test Isolation: When testing duplicate target identity collision, initial test mapping mapped `first_name` to `user_id`, but all 50 seed customer first names were distinct. Separated record-level execution into an exported pure function `processRecordExecution` allowing unit-level duplicate collision testing alongside end-to-end database testing.
+- Mongoose Reserved Keyword Warning: Mongoose emitted a warning regarding the subschema property name `errors` in `RecordExecutionOutcomeSubSchema`. Configured `{ suppressReservedKeysWarning: true }` in the schema options.
+
+### Verification
+Concrete commands executed and runtime evidence:
+
+```bash
+npm run verify
+```
+Result: 11/11 foundation checks PASSED. Source count = 50, Target count = 0 (pre-execution baseline).
+
+```bash
+npm run test:schema
+```
+Result: `ALL_SCHEMA_TESTS_PASSED`
+
+```bash
+npm run test:mapping
+```
+Result: `LIVE_GEMINI_PROPOSAL_SUCCESS`, `ALL_MAPPING_TESTS_PASSED`
+
+```bash
+npm run test:plan
+```
+Result: `ALL_PLAN_TESTS_PASSED`
+
+```bash
+npm run test:rejection
+```
+Result: `REJECTION RUNTIME WORKFLOW VERIFIED SUCCESSFULLY`
+
+```bash
+npm run test:dry-run
+```
+Result: `ALL_DRY_RUN_TESTS_PASSED`
+
+```bash
+npx tsx --env-file=.env.local src/test/integration.test.ts
+```
+Result: `INTEGRATION_TEST_PASSED`
+
+```bash
+npx tsc --noEmit
+```
+Result: Exited with code 0. Zero TypeScript errors.
+
+```bash
+npm run build
+```
+Result: Production build succeeded with `/api/migration/execute` compiled.
+
+```bash
+npm run test:execution
+```
+Result: All 15 unit, collision, state boundary, and target write tests PASSED (`ALL_EXECUTION_TESTS_PASSED`).
+
+```text
+Live Runtime Migration Execution Verification (http://localhost:3000):
+- Pre-execution counts:
+  - source_customers: 50
+  - target_users: 0
+- State boundary tests:
+  - Invalid plan ID: HTTP 400
+  - Non-existent plan ID: HTTP 404
+  - Pending plan execution: HTTP 409 Conflict ("Plan is pending approval and cannot be executed")
+  - Rejected plan execution: HTTP 409 Conflict ("Plan was rejected and cannot be executed")
+- Live execution of approved plan (Plan ID: 6ac742e4a5c76c8926111b32):
+  - HTTP 200 OK
+  - Run ID: 6ac742e5264bca96e009f5fb
+  - Status: completed
+  - Total records: 50
+  - Migrated records: 43
+  - Quarantined records: 7
+  - Failed records: 0
+  - Target Before: 0
+  - Target After: 43
+- Post-execution MongoDB counts:
+  - source_customers: 50 (strictly read-only, zero mutations)
+  - target_users: 43 (first actual target population)
+  - migration_runs: 1 (completed execution audit record)
+- Representative migrated target records:
+  - CUST-001: Aarav Sharma (user_id: "CUST-001", birth_year: 1990, email_address: "aarav.sharma@example.com", phone_number: "+1-555-0101")
+  - CUST-002: Mei Chen (user_id: "CUST-002", birth_year: 1985, email_address: "mei.chen@example.com", phone_number: "+1-555-0102")
+  - CUST-040: Soren Berg (user_id: "CUST-040", birth_year: 1989, email_address: "soren.berg@example.com", phone_number: "+1-555-0140")
+- Quarantined invalid records verified strictly ABSENT from target_users:
+  - CUST-041 to CUST-044 (invalid emails): ABSENT
+  - CUST-048 (invalid date): ABSENT
+  - CUST-049 (invalid phone): ABSENT
+  - CUST-050 (multi-issue): ABSENT
+```
+

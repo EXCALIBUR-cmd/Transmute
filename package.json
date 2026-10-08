@@ -13,7 +13,8 @@
     "test:mapping": "tsx --env-file=.env.local src/test/mapping.test.ts",
     "test:plan": "tsx --env-file=.env.local src/test/plan.test.ts",
     "test:rejection": "tsx --env-file=.env.local src/test/rejection.test.ts",
-    "test:dry-run": "tsx --env-file=.env.local src/test/dry-run.test.ts"
+    "test:dry-run": "tsx --env-file=.env.local src/test/dry-run.test.ts",
+    "test:execution": "tsx --env-file=.env.local src/test/execution.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.27.0",
