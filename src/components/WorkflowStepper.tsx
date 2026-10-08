@@ -9,84 +9,156 @@ export type WorkflowStageKey =
   | "reconciliation"
   | "recovery";
 
-interface StageInfo {
+export type WorkflowStageStatus =
+  | "completed"
+  | "approved"
+  | "reconciled"
+  | "pending"
+  | "available"
+  | "locked"
+  | "failed";
+
+export interface StageInfo {
   key: WorkflowStageKey;
   step: string;
   title: string;
   subtitle: string;
-  status: "complete" | "active" | "available" | "locked";
+  workflowStatus: WorkflowStageStatus;
 }
 
 interface WorkflowStepperProps {
   currentStage: WorkflowStageKey;
   onSelectStage: (stage: WorkflowStageKey) => void;
-  hasSchema: boolean;
-  hasProposal: boolean;
-  isApproved: boolean;
-  hasDryRun: boolean;
-  hasExecuted: boolean;
-  hasReconciled: boolean;
+  stageStatuses: Record<WorkflowStageKey, WorkflowStageStatus>;
+  stageSubtitles?: Partial<Record<WorkflowStageKey, string>>;
+  hasSchema?: boolean;
+  hasProposal?: boolean;
+  isApproved?: boolean;
+  hasDryRun?: boolean;
+  hasExecuted?: boolean;
+  hasReconciled?: boolean;
+}
+
+function renderStatusBadge(status: WorkflowStageStatus) {
+  switch (status) {
+    case "completed":
+      return (
+        <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+          <span>✓</span>
+          <span>Completed</span>
+        </span>
+      );
+    case "approved":
+      return (
+        <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+          <span>✓</span>
+          <span>Approved</span>
+        </span>
+      );
+    case "reconciled":
+      return (
+        <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+          <span>✓</span>
+          <span>Reconciled</span>
+        </span>
+      );
+    case "pending":
+      return (
+        <span className="text-[10px] text-amber-400 font-medium flex items-center gap-1">
+          <span>○</span>
+          <span>Pending</span>
+        </span>
+      );
+    case "available":
+      return (
+        <span className="text-[10px] text-zinc-400 flex items-center gap-1">
+          <span>○</span>
+          <span>Available</span>
+        </span>
+      );
+    case "failed":
+      return (
+        <span className="text-[10px] text-rose-400 font-semibold flex items-center gap-1">
+          <span>✕</span>
+          <span>Failed</span>
+        </span>
+      );
+    case "locked":
+    default:
+      return (
+        <span className="text-[10px] text-zinc-600 flex items-center gap-1">
+          <span>🔒</span>
+          <span>Locked</span>
+        </span>
+      );
+  }
 }
 
 export const WorkflowStepper: React.FC<WorkflowStepperProps> = ({
   currentStage,
   onSelectStage,
-  hasSchema,
-  hasProposal,
-  isApproved,
-  hasDryRun,
-  hasExecuted,
-  hasReconciled,
+  stageStatuses,
+  stageSubtitles = {},
 }) => {
+  const defaultSubtitles: Record<WorkflowStageKey, string> = {
+    schema: "50 src / 5 tgt",
+    proposal: "Mappings generated",
+    approval: "Trust Boundary",
+    dryrun: "In-Memory Test",
+    execution: "Deterministic Write",
+    reconciliation: "Read-Only Audit",
+    recovery: "Run-Scoped Rollback",
+  };
+
   const stages: StageInfo[] = [
     {
       key: "schema",
       step: "01",
       title: "Schema Inspection",
-      subtitle: hasSchema ? "50 src / 5 tgt" : "Ready",
-      status: hasSchema ? "complete" : currentStage === "schema" ? "active" : "available",
+      subtitle: stageSubtitles.schema || defaultSubtitles.schema,
+      workflowStatus: stageStatuses.schema,
     },
     {
       key: "proposal",
       step: "02",
       title: "AI Proposal",
-      subtitle: hasProposal ? "Mappings generated" : "Gemini Flash",
-      status: hasProposal ? "complete" : currentStage === "proposal" ? "active" : "available",
+      subtitle: stageSubtitles.proposal || defaultSubtitles.proposal,
+      workflowStatus: stageStatuses.proposal,
     },
     {
       key: "approval",
       step: "03",
       title: "Human Approval",
-      subtitle: isApproved ? "Approved by engineer" : "Trust Boundary",
-      status: isApproved ? "complete" : currentStage === "approval" ? "active" : "available",
+      subtitle: stageSubtitles.approval || defaultSubtitles.approval,
+      workflowStatus: stageStatuses.approval,
     },
     {
       key: "dryrun",
       step: "04",
       title: "Deterministic Dry Run",
-      subtitle: hasDryRun ? "Zero writes verified" : "In-Memory Test",
-      status: hasDryRun ? "complete" : currentStage === "dryrun" ? "active" : isApproved ? "available" : "locked",
+      subtitle: stageSubtitles.dryrun || defaultSubtitles.dryrun,
+      workflowStatus: stageStatuses.dryrun,
     },
     {
       key: "execution",
       step: "05",
       title: "Migration Execution",
-      subtitle: hasExecuted ? "Target updated" : "Deterministic Write",
-      status: hasExecuted ? "complete" : currentStage === "execution" ? "active" : isApproved ? "available" : "locked",
+      subtitle: stageSubtitles.execution || defaultSubtitles.execution,
+      workflowStatus: stageStatuses.execution,
     },
     {
       key: "reconciliation",
       step: "06",
       title: "Reconciliation",
-      subtitle: hasReconciled ? "State verified" : "Read-Only Audit",
-      status: hasReconciled ? "complete" : currentStage === "reconciliation" ? "active" : hasExecuted ? "available" : "locked",
+      subtitle: stageSubtitles.reconciliation || defaultSubtitles.reconciliation,
+      workflowStatus: stageStatuses.reconciliation,
     },
     {
       key: "recovery",
       step: "07",
       title: "History & Recovery",
-      subtitle: "Run-Scoped Rollback",
-      status: currentStage === "recovery" ? "active" : "available",
+      subtitle: stageSubtitles.recovery || defaultSubtitles.recovery,
+      workflowStatus: stageStatuses.recovery,
     },
   ];
 
@@ -96,25 +168,33 @@ export const WorkflowStepper: React.FC<WorkflowStepperProps> = ({
       className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2"
     >
       {stages.map((stage) => {
-        const isCurrent = currentStage === stage.key;
-        const isLocked = stage.status === "locked";
+        const isSelected = currentStage === stage.key;
+        const isLocked = stage.workflowStatus === "locked";
 
-        let cardClasses = "bg-zinc-900/40 border-zinc-800/80 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200";
-        let statusBadge = <span className="text-[10px] text-zinc-500">○ Pending</span>;
+        let cardClasses = "";
 
-        if (stage.status === "complete") {
-          cardClasses = "bg-zinc-900/60 border-emerald-900/40 text-zinc-300 hover:border-emerald-700/60";
-          statusBadge = <span className="text-[10px] text-emerald-400 font-semibold">✓ Completed</span>;
-        }
-
-        if (isCurrent) {
-          cardClasses = "bg-indigo-950/40 border-indigo-500/70 text-white shadow-lg shadow-indigo-950/50 ring-1 ring-indigo-500/40";
-          statusBadge = <span className="text-[10px] text-indigo-300 font-bold animate-pulse">● Active</span>;
-        }
-
-        if (isLocked) {
-          cardClasses = "bg-zinc-950/30 border-zinc-900 text-zinc-600 opacity-60 cursor-not-allowed";
-          statusBadge = <span className="text-[10px] text-zinc-600">🔒 Locked</span>;
+        if (isSelected) {
+          cardClasses =
+            "bg-indigo-950/40 border-indigo-500/80 text-white shadow-lg shadow-indigo-950/50 ring-2 ring-indigo-500/60";
+        } else if (
+          stage.workflowStatus === "completed" ||
+          stage.workflowStatus === "approved" ||
+          stage.workflowStatus === "reconciled"
+        ) {
+          cardClasses =
+            "bg-zinc-900/60 border-emerald-900/40 text-zinc-300 hover:border-emerald-700/60 hover:text-white";
+        } else if (stage.workflowStatus === "pending") {
+          cardClasses =
+            "bg-zinc-900/40 border-amber-800/40 text-zinc-300 hover:border-amber-700/60 hover:text-white";
+        } else if (stage.workflowStatus === "failed") {
+          cardClasses =
+            "bg-zinc-900/40 border-rose-800/40 text-zinc-300 hover:border-rose-700/60";
+        } else if (isLocked) {
+          cardClasses =
+            "bg-zinc-950/30 border-zinc-900 text-zinc-600 opacity-60 cursor-not-allowed";
+        } else {
+          cardClasses =
+            "bg-zinc-900/40 border-zinc-800/80 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200";
         }
 
         return (
@@ -126,10 +206,22 @@ export const WorkflowStepper: React.FC<WorkflowStepperProps> = ({
             className={`p-3 rounded-xl border text-left transition-all duration-150 flex flex-col justify-between gap-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 ${cardClasses}`}
           >
             <div className="flex items-center justify-between w-full">
-              <span className="text-[10px] font-mono tracking-widest text-zinc-500 font-bold">
-                {stage.step}
-              </span>
-              {statusBadge}
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`text-[10px] font-mono tracking-widest font-bold ${
+                    isSelected ? "text-indigo-300" : "text-zinc-500"
+                  }`}
+                >
+                  {stage.step}
+                </span>
+                {isSelected && (
+                  <span
+                    className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-pulse"
+                    aria-label="Active selection"
+                  />
+                )}
+              </div>
+              {renderStatusBadge(stage.workflowStatus)}
             </div>
 
             <div>

@@ -687,6 +687,46 @@ Live Endpoint Verification against Dev Server (http://localhost:3000):
   - `npm run verify`: PASS (50 source customers, 43 target users, 0 duplicates)
 - Zero-comment audit: `grep -r -E '(\/\*|\*\/|\/\/|TODO|FIXME)' src/` returned 0 matches.
 
+## Loop 8B — Workflow Stepper State Correction
+
+### Delegated Work
+- Decoupled `workflowStatus` from `currentStage` (selected UI stage) in `src/components/WorkflowStepper.tsx`.
+- Replaced the overloaded `StageInfo.status: "complete" | "active" | "available" | "locked"` union with dedicated `workflowStatus: WorkflowStageStatus` tracking true operational progress (`completed`, `approved`, `reconciled`, `pending`, `available`, `locked`, `failed`).
+- Separated active viewport focus styling (`isSelected` with indigo focus ring and animated status chip) from the status badge, ensuring the true workflow status (`✓ Completed`, `✓ Approved`, `✓ Reconciled`, `○ Available`, `🔒 Locked`) remains visible whether the stage card is currently selected or not.
+- Derived all 7 workflow stage statuses in `src/app/page.tsx` directly from real backend state (`schemaData`, `activePlan`, `dryRunResult`, `migrationRuns`, `executionResult`, `reconciliationResult`) rather than in-memory navigation events.
+- Ensured user navigation across process tabs (`onSelectStage`) mutates only `currentStage` without affecting any stage's workflow status or triggering spurious backend writes.
+
+### Human Engineering Work
+- Audited the deployed control room UI behavior and identified the root-cause state conflation: `WorkflowStepper` treated active UI panel selection as a workflow status state, which overwrote the status badge with `● Active` when selected and falsely revealed `✓ Completed` upon deselecting the tab.
+- Established the independent two-axis state model: `workflowStatus` represents immutable/persisted system progress, while `selectedStage` represents active user viewport navigation.
+- Defined explicit acceptance criteria requiring stable, invariant workflow status badges across sequential stage navigation.
+- Verified that backend contracts, MongoDB models, and migration execution logic remained completely frozen during the frontend state correction.
+
+### Corrections / Rejected Approaches
+- Conflating UI Viewport State with Process Status: The previous implementation defined `"active"` inside the stage status enum, causing a stage to lose its true progress status while viewed and appear to transition to "Completed" when clicking away. Corrected by maintaining `workflowStatus` independently and rendering `isSelected` focus rings alongside the invariant status badge.
+- In-Memory Ephemeral Flags: Replaced ephemeral stage tracking with authoritative checks against loaded backend metadata (`schemaData`, `activePlan`, `migrationRuns`, `reconciliationResult`).
+
+### Verification
+- Stage-Selection Stability Verification:
+  - Loaded control room on `http://localhost:3000/`.
+  - Step 1 Initial State: Recorded all 7 stage statuses: `schema` (Completed), `proposal` (Completed), `approval` (Approved/Pending), `dryrun` (Completed), `execution` (Completed), `reconciliation` (Reconciled), `recovery` (Available).
+  - Step 2 Navigation to Stage 2 (`proposal`): Verified all 7 stage statuses remained 100% identical; only active focus shifted to Stage 2.
+  - Step 3 Navigation to Stage 3 (`approval`): Verified all 7 stage statuses remained 100% identical; only active focus shifted to Stage 3.
+  - Step 4 Navigation to Stage 6 (`reconciliation`): Verified all 7 stage statuses remained 100% identical; only active focus shifted to Stage 6.
+- TypeScript Compilation: `npx tsc --noEmit` exited with code 0 (0 errors).
+- Production Build: `npm run build` completed successfully (`▲ Next.js 16.3.8 (Turbopack)`).
+- Backend Regression Suite:
+  - `npm run verify`: PASS (50 source customers, 43 target users)
+  - `npm run test:schema`: PASS
+  - `npm run test:mapping`: PASS
+  - `npm run test:plan`: PASS
+  - `npm run test:rejection`: PASS
+  - `npm run test:dry-run`: PASS
+  - `npm run test:execution`: PASS
+  - `npm run test:safety`: PASS
+  - `npx tsx --env-file=.env.local src/test/integration.test.ts`: PASS
+- Zero-Comment Audit: 0 comments in `src/`.
+
 
 
 

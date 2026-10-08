@@ -10,7 +10,7 @@ import { ReconciliationResult } from "@/types/reconciliation";
 import { RollbackResult } from "@/types/rollback";
 import { IMigrationRun } from "@/models/MigrationRun";
 import { Topbar } from "@/components/Topbar";
-import { WorkflowStepper, WorkflowStageKey } from "@/components/WorkflowStepper";
+import { WorkflowStepper, WorkflowStageKey, WorkflowStageStatus } from "@/components/WorkflowStepper";
 import { SchemaPanel } from "@/components/SchemaPanel";
 import { MappingCard } from "@/components/MappingCard";
 import { RiskPanel } from "@/components/RiskPanel";
@@ -381,6 +381,68 @@ export default function Home() {
     recovery: "Controlled Migration Workbench · Stage 8: Run-Scoped Recovery & Rollback",
   };
 
+  const hasExecuted =
+    executionResult?.status === "completed" ||
+    migrationRuns.some((r) => r.status === "completed");
+
+  const hasDryRun = dryRunResult !== null || hasExecuted;
+
+  const hasReconciled =
+    reconciliationResult?.status === "reconciled" ||
+    migrationRuns.some((r) => {
+      const rec = r.reconciliationResult as { status?: string } | undefined;
+      return rec?.status === "reconciled";
+    });
+
+  const stageStatuses: Record<WorkflowStageKey, WorkflowStageStatus> = {
+    schema: schemaData ? "completed" : isLoadingSchema ? "pending" : "available",
+    proposal:
+      activePlan && activePlan.proposal && activePlan.proposal.mappings.length > 0
+        ? "completed"
+        : schemaData
+        ? "available"
+        : "locked",
+    approval: activePlan
+      ? activePlan.status === "approved"
+        ? "approved"
+        : activePlan.status === "rejected"
+        ? "failed"
+        : "pending"
+      : "locked",
+    dryrun: hasDryRun ? "completed" : isPlanApproved ? "available" : "locked",
+    execution: hasExecuted
+      ? "completed"
+      : executionResult?.status === "failed"
+      ? "failed"
+      : isPlanApproved
+      ? "available"
+      : "locked",
+    reconciliation: hasReconciled
+      ? "reconciled"
+      : hasExecuted
+      ? "available"
+      : "locked",
+    recovery: "available",
+  };
+
+  const stepperSubtitles: Partial<Record<WorkflowStageKey, string>> = {
+    schema: schemaData ? "50 src / 5 tgt" : "Ready",
+    proposal:
+      activePlan && activePlan.proposal
+        ? `${activePlan.proposal.mappings.length} mappings`
+        : "Gemini Flash",
+    approval:
+      activePlan?.status === "approved"
+        ? "Approved by engineer"
+        : activePlan?.status === "rejected"
+        ? "Plan Rejected"
+        : "Trust Boundary",
+    dryrun: hasDryRun ? "Zero writes verified" : "In-Memory Test",
+    execution: hasExecuted ? "Target updated" : "Deterministic Write",
+    reconciliation: hasReconciled ? "State verified" : "Read-Only Audit",
+    recovery: "Run-Scoped Rollback",
+  };
+
   return (
     <div className="min-h-screen bg-[#090b10] text-zinc-100 flex flex-col font-sans selection:bg-indigo-500/30 selection:text-indigo-200">
       <Topbar
@@ -395,12 +457,8 @@ export default function Home() {
         <WorkflowStepper
           currentStage={currentStage}
           onSelectStage={setCurrentStage}
-          hasSchema={!!schemaData}
-          hasProposal={!!activePlan}
-          isApproved={isPlanApproved}
-          hasDryRun={!!dryRunResult}
-          hasExecuted={!!executionResult || migrationRuns.length > 0}
-          hasReconciled={!!reconciliationResult}
+          stageStatuses={stageStatuses}
+          stageSubtitles={stepperSubtitles}
         />
 
         {errorMessage && (
