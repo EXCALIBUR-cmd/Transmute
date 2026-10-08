@@ -245,12 +245,12 @@ async function runTests() {
 
     assert.equal(result.status, "completed");
     assert.equal(result.totalRecords, 50);
-    assert.equal(result.migratedRecords, 43);
+    assert.equal(result.migratedRecords + result.skippedRecords, 43);
     assert.equal(result.quarantinedRecords, 7);
     assert.equal(result.failedRecords, 0);
     assert.equal(
       result.totalRecords,
-      result.migratedRecords + result.quarantinedRecords + result.failedRecords
+      result.migratedRecords + result.skippedRecords + result.quarantinedRecords + result.failedRecords
     );
 
     const cust001 = await User.findOne({ user_id: "CUST-001" }).lean();
@@ -293,7 +293,7 @@ async function runTests() {
     assert.ok(persistedRun);
     assert.equal(persistedRun.status, "completed");
     assert.equal(persistedRun.totalRecords, 50);
-    assert.equal(persistedRun.migratedRecords, 43);
+    assert.equal(persistedRun.migratedRecords + persistedRun.skippedRecords, 43);
     assert.equal(persistedRun.quarantinedRecords, 7);
     assert.equal(persistedRun.failedRecords, 0);
     assert.equal(persistedRun.recordResults.length, 50);

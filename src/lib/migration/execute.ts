@@ -7,6 +7,7 @@ import { User } from "@/models/User";
 import { inspectModel } from "@/lib/schema/inspect";
 import { executeTransformation } from "@/lib/migration/transform";
 import { validateTargetRecord } from "@/lib/migration/validator";
+import { areTargetRecordsIdentical } from "@/lib/migration/compare";
 import { logWorkflowEvent } from "@/lib/logger";
 import { FieldMapping } from "@/types/mapping";
 import { SchemaMetadata } from "@/types/schema";
@@ -38,7 +39,8 @@ export function processRecordExecution(
   rawDoc: Record<string, unknown>,
   mappings: FieldMapping[],
   targetMeta: SchemaMetadata,
-  seenTargetIds: Set<string>
+  seenTargetIds: Set<string>,
+  existingRecord?: Record<string, unknown> | null
 ): ProcessedRecordResult {
   const sourceId = String(rawDoc.id || rawDoc._id || "unknown");
   const transformed: Record<string, unknown> = {};
@@ -78,6 +80,7 @@ export function processRecordExecution(
       outcome: {
         sourceId,
         status: "quarantined",
+        action: "quarantined",
         targetId: null,
         category: failureCategory,
         errors: recordErrors,
@@ -95,6 +98,7 @@ export function processRecordExecution(
       outcome: {
         sourceId,
         status: "failed",
+        action: "failed",
         targetId: null,
         category: "validation_error",
         errors: [
@@ -116,6 +120,7 @@ export function processRecordExecution(
       outcome: {
         sourceId,
         status: "failed",
+        action: "conflict",
         targetId,
         category: "duplicate_identity",
         errors: [
@@ -132,12 +137,75 @@ export function processRecordExecution(
 
   seenTargetIds.add(targetId);
 
+  if (existingRecord !== undefined) {
+    if (existingRecord === null) {
+      return {
+        sourceId,
+        targetId,
+        outcome: {
+          sourceId,
+          status: "migrated",
+          action: "created",
+          targetId,
+          category: null,
+          errors: [],
+        },
+        transformedRecord: transformed,
+      };
+    }
+
+    const isMatch = areTargetRecordsIdentical(
+      existingRecord,
+      transformed,
+      targetMeta
+    );
+
+    if (isMatch) {
+      return {
+        sourceId,
+        targetId,
+        outcome: {
+          sourceId,
+          status: "skipped",
+          action: "skipped",
+          reason: "already_migrated",
+          targetId,
+          category: null,
+          errors: [],
+        },
+        transformedRecord: transformed,
+      };
+    }
+
+    return {
+      sourceId,
+      targetId,
+      outcome: {
+        sourceId,
+        status: "failed",
+        action: "conflict",
+        reason: "content_mismatch",
+        targetId,
+        category: "conflict",
+        errors: [
+          {
+            field: "user_id",
+            message: `Target record "${targetId}" exists but differs from expected migration output`,
+            category: "schema_violation",
+          },
+        ],
+      },
+      transformedRecord: transformed,
+    };
+  }
+
   return {
     sourceId,
     targetId,
     outcome: {
       sourceId,
       status: "migrated",
+      action: "created",
       targetId,
       category: null,
       errors: [],
@@ -230,6 +298,7 @@ export async function executeMigration(
     const seenTargetIds = new Set<string>();
 
     let migratedCount = 0;
+    let skippedCount = 0;
     let quarantinedCount = 0;
     let failedCount = 0;
 
@@ -269,55 +338,112 @@ export async function executeMigration(
         continue;
       }
 
-      if (processed.outcome.status === "migrated" && processed.transformedRecord) {
-        try {
-          await User.updateOne(
-            { user_id: processed.targetId },
-            { $set: processed.transformedRecord },
-            { upsert: true }
+      if (processed.transformedRecord && processed.targetId) {
+        const existing = await User.findOne({ user_id: processed.targetId }).lean().exec();
+
+        if (!existing) {
+          try {
+            await User.updateOne(
+              { user_id: processed.targetId },
+              { $set: processed.transformedRecord },
+              { upsert: true }
+            );
+
+            processed.outcome.action = "created";
+            processed.outcome.status = "migrated";
+            migratedCount += 1;
+            recordResults.push(processed.outcome);
+
+            logWorkflowEvent({
+              event: "migration_record_migrated",
+              planId,
+              runId: run._id.toString(),
+              sourceId: processed.sourceId,
+              targetId: processed.targetId,
+              action: "created",
+            });
+          } catch (writeErr: unknown) {
+            const isDup = (writeErr as { code?: number })?.code === 11000;
+            const writeCategory: ExecutionFailureCategory = isDup
+              ? "duplicate_identity"
+              : "target_write_error";
+            const writeMsg =
+              writeErr instanceof Error ? writeErr.message : String(writeErr);
+
+            failedCount += 1;
+            recordResults.push({
+              sourceId: processed.sourceId,
+              status: "failed",
+              action: "failed",
+              targetId: processed.targetId,
+              category: writeCategory,
+              errors: [
+                {
+                  field: "user_id",
+                  message: writeMsg,
+                  category: "schema_violation",
+                },
+              ],
+            });
+
+            logWorkflowEvent({
+              event: "migration_record_failed",
+              planId,
+              runId: run._id.toString(),
+              sourceId: processed.sourceId,
+              targetId: processed.targetId,
+              category: writeCategory,
+            });
+          }
+        } else {
+          const isIdentical = areTargetRecordsIdentical(
+            existing as unknown as Record<string, unknown>,
+            processed.transformedRecord,
+            targetMeta
           );
 
-          migratedCount += 1;
-          recordResults.push(processed.outcome);
+          if (isIdentical) {
+            processed.outcome.action = "skipped";
+            processed.outcome.status = "skipped";
+            processed.outcome.reason = "already_migrated";
+            skippedCount += 1;
+            recordResults.push(processed.outcome);
 
-          logWorkflowEvent({
-            event: "migration_record_migrated",
-            planId,
-            runId: run._id.toString(),
-            sourceId: processed.sourceId,
-            targetId: processed.targetId || undefined,
-          });
-        } catch (writeErr: unknown) {
-          const isDup = (writeErr as { code?: number })?.code === 11000;
-          const writeCategory: ExecutionFailureCategory = isDup
-            ? "duplicate_identity"
-            : "target_write_error";
-          const writeMsg =
-            writeErr instanceof Error ? writeErr.message : String(writeErr);
-
-          failedCount += 1;
-          recordResults.push({
-            sourceId: processed.sourceId,
-            status: "failed",
-            targetId: processed.targetId,
-            category: writeCategory,
-            errors: [
+            logWorkflowEvent({
+              event: "migration_record_skipped",
+              planId,
+              runId: run._id.toString(),
+              sourceId: processed.sourceId,
+              targetId: processed.targetId,
+              action: "skipped",
+              reason: "already_migrated",
+            });
+          } else {
+            processed.outcome.action = "conflict";
+            processed.outcome.status = "failed";
+            processed.outcome.category = "conflict";
+            processed.outcome.reason = "content_mismatch";
+            processed.outcome.errors = [
               {
                 field: "user_id",
-                message: writeMsg,
+                message: `Target record "${processed.targetId}" already exists with conflicting content`,
                 category: "schema_violation",
               },
-            ],
-          });
+            ];
 
-          logWorkflowEvent({
-            event: "migration_record_failed",
-            planId,
-            runId: run._id.toString(),
-            sourceId: processed.sourceId,
-            targetId: processed.targetId || undefined,
-            category: writeCategory,
-          });
+            failedCount += 1;
+            recordResults.push(processed.outcome);
+
+            logWorkflowEvent({
+              event: "migration_record_failed",
+              planId,
+              runId: run._id.toString(),
+              sourceId: processed.sourceId,
+              targetId: processed.targetId,
+              category: "conflict",
+              action: "conflict",
+            });
+          }
         }
       }
     }
@@ -328,11 +454,14 @@ export async function executeMigration(
     const durationMs = completedAt.getTime() - run.startedAt.getTime();
 
     const finalStatus: ExecutionStatus =
-      failedCount > 0 && migratedCount === 0 ? "failed" : "completed";
+      failedCount > 0 && migratedCount === 0 && skippedCount === 0
+        ? "failed"
+        : "completed";
 
     run.status = finalStatus;
     run.totalRecords = sourceDocs.length;
     run.migratedRecords = migratedCount;
+    run.skippedRecords = skippedCount;
     run.quarantinedRecords = quarantinedCount;
     run.failedRecords = failedCount;
     run.completedAt = completedAt;
@@ -347,6 +476,7 @@ export async function executeMigration(
       targetCollection: plan.targetCollection,
       totalRecords: sourceDocs.length,
       migratedCount,
+      skippedCount,
       quarantinedCount,
       failedCount,
       durationMs,
@@ -360,6 +490,7 @@ export async function executeMigration(
       status: finalStatus,
       totalRecords: sourceDocs.length,
       migratedRecords: migratedCount,
+      skippedRecords: skippedCount,
       quarantinedRecords: quarantinedCount,
       failedRecords: failedCount,
       recordsBefore: {

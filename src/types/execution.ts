@@ -2,26 +2,48 @@ import { RecordValidationError } from "@/types/dry-run";
 
 export type ExecutionStatus = "pending" | "running" | "completed" | "failed";
 
-export type ExecutionOutcomeStatus = "migrated" | "quarantined" | "failed";
+export type ExecutionOutcomeStatus =
+  | "migrated"
+  | "skipped"
+  | "quarantined"
+  | "failed";
+
+export type RecordAction =
+  | "created"
+  | "skipped"
+  | "conflict"
+  | "quarantined"
+  | "failed";
 
 export type ExecutionFailureCategory =
   | "transformation_error"
   | "validation_error"
   | "target_write_error"
   | "duplicate_identity"
-  | "execution_error";
+  | "execution_error"
+  | "conflict";
+
+export type RollbackStatus =
+  | "pending"
+  | "rolled_back"
+  | "rollback_partial"
+  | "rollback_failed";
 
 export interface RecordExecutionOutcome {
   sourceId: string;
   status: ExecutionOutcomeStatus;
+  action?: RecordAction;
   targetId?: string | null;
   category?: ExecutionFailureCategory | null;
+  reason?: string | null;
+  rolledBack?: boolean;
   errors?: RecordValidationError[];
 }
 
 export interface MigrationExecutionStatistics {
   totalRecords: number;
   migratedRecords: number;
+  skippedRecords: number;
   quarantinedRecords: number;
   failedRecords: number;
 }
@@ -34,6 +56,7 @@ export interface MigrationExecutionResult {
   status: ExecutionStatus;
   totalRecords: number;
   migratedRecords: number;
+  skippedRecords: number;
   quarantinedRecords: number;
   failedRecords: number;
   recordsBefore: {

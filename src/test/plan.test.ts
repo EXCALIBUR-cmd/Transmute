@@ -23,7 +23,7 @@ async function runTests() {
   const initialTargetCount = await User.countDocuments();
 
   assert.equal(initialSourceCount, 50, "Initial source count must be 50");
-  assert.equal(initialTargetCount, 0, "Initial target count must be 0");
+  assert.equal(initialTargetCount, 43, "Initial target count must be 43");
 
   const createdPlanIds: mongoose.Types.ObjectId[] = [];
 
@@ -308,7 +308,7 @@ async function runTests() {
     const afterSourceCount = await Customer.countDocuments();
     const afterTargetCount = await User.countDocuments();
     assert.equal(afterSourceCount, 50, "Source count must remain 50");
-    assert.equal(afterTargetCount, 0, "Target count must remain 0");
+    assert.equal(afterTargetCount, 43, "Target count must remain 43");
 
     const finalGetRes = await getPlanHandler(getPlanReq, {
       params: Promise.resolve({ id: createdData.id }),

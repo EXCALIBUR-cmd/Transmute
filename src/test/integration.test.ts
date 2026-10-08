@@ -25,7 +25,7 @@ async function runIntegration(): Promise<void> {
     collections.length > 0
       ? await db.collection("target_users").countDocuments()
       : 0;
-  assert.equal(initialTargetCount, 0, "Initial target count must be 0");
+  assert.equal(initialTargetCount, 43, "Initial target count must be 43");
 
   const response1 = await GET();
   assert.equal(response1.status, 200, "API must return 200");
@@ -62,7 +62,7 @@ async function runIntegration(): Promise<void> {
     finalTargetCollections.length > 0
       ? await db.collection("target_users").countDocuments()
       : 0;
-  assert.equal(finalTargetCount, 0, "Target count must remain 0 after inspection");
+  assert.equal(finalTargetCount, 43, "Target count must remain 43 after inspection");
 
   await mongoose.disconnect();
   console.log("INTEGRATION_TEST_PASSED");

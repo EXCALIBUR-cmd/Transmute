@@ -116,7 +116,7 @@ async function runTests() {
   const targetBefore = await User.countDocuments();
 
   assert.equal(sourceBefore, 50);
-  assert.equal(targetBefore, 0);
+  assert.equal(targetBefore, 43);
 
   const createdPlanIds: mongoose.Types.ObjectId[] = [];
 
@@ -225,7 +225,7 @@ async function runTests() {
     );
 
     const targetAfter = await User.countDocuments();
-    assert.equal(targetAfter, 0);
+    assert.equal(targetAfter, 43);
 
     const sourceAfter = await Customer.countDocuments();
     assert.equal(sourceAfter, 50);

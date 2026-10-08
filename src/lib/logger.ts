@@ -8,10 +8,19 @@ export type WorkflowLogEvent =
   | "migration_dry_run_failed"
   | "migration_execution_started"
   | "migration_record_migrated"
+  | "migration_record_skipped"
   | "migration_record_quarantined"
   | "migration_record_failed"
   | "migration_execution_completed"
-  | "migration_execution_failed";
+  | "migration_execution_failed"
+  | "migration_reconciliation_started"
+  | "migration_reconciliation_completed"
+  | "migration_reconciliation_failed"
+  | "migration_rollback_started"
+  | "migration_record_rolled_back"
+  | "migration_record_rollback_skipped"
+  | "migration_rollback_completed"
+  | "migration_rollback_failed";
 
 export interface WorkflowLogPayload {
   event: WorkflowLogEvent;
@@ -27,11 +36,16 @@ export interface WorkflowLogPayload {
   validCount?: number;
   invalidCount?: number;
   migratedCount?: number;
+  skippedCount?: number;
   quarantinedCount?: number;
   failedCount?: number;
+  rolledBackCount?: number;
+  rollbackSkippedCount?: number;
   sourceId?: string;
   targetId?: string;
   category?: string;
+  action?: string;
+  reason?: string;
   durationMs?: number;
   timestamp?: string;
 }

@@ -14,7 +14,11 @@
     "test:plan": "tsx --env-file=.env.local src/test/plan.test.ts",
     "test:rejection": "tsx --env-file=.env.local src/test/rejection.test.ts",
     "test:dry-run": "tsx --env-file=.env.local src/test/dry-run.test.ts",
-    "test:execution": "tsx --env-file=.env.local src/test/execution.test.ts"
+    "test:execution": "tsx --env-file=.env.local src/test/execution.test.ts",
+    "test:safety": "tsx --env-file=.env.local src/test/safety.test.ts",
+    "test:idempotency": "tsx --env-file=.env.local src/test/safety.test.ts",
+    "test:reconciliation": "tsx --env-file=.env.local src/test/safety.test.ts",
+    "test:rollback": "tsx --env-file=.env.local src/test/safety.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.27.0",

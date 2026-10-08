@@ -369,3 +369,161 @@ Live Runtime Migration Execution Verification (http://localhost:3000):
   - CUST-050 (multi-issue): ABSENT
 ```
 
+---
+
+## Retrospective — LOOP 7: Hardening — Reconciliation, Idempotency, and Run-Scoped Rollback
+
+### Human Engineering Decisions
+- Choosing Run-Scoped Rollback: Explicitly rejected global/table-level deletion (`deleteMany({})`) and plan-scoped deletion (`delete where user_id in plan`). Mandated that rollback must operate strictly and exclusively on target documents proven to have been CREATED by the specific selected migration run.
+- Defining Idempotency Behavior: Mandated that repeat execution against an already-migrated target must not create duplicate identities or rewrite identical documents. Specified exact outcome categorization: if the target document exists with identical values, record `action: "skipped"`, `status: "skipped"`, `reason: "already_migrated"`. If the target document exists but differs in content, record `action: "conflict"`, `status: "failed"`, `reason: "content_mismatch"`.
+- Deciding Reconciliation Success Criteria: Defined reconciliation as a read-only audit comparing actual database documents in `target_users` against expected outcomes of an approved plan. Declared reconciliation successful (`status: "reconciled"`) only when: all expected target records exist, content matches deterministic transformation output (0 mismatches), 0 missing records, and 0 quarantined source records are present in target.
+- Reviewing Target Ownership & Legacy Backfill: Established that historical run `6ac742e5264bca96e009f5fb` predated the `action` field. Rather than permitting blind rollback or deleting data, audited target state (`target_users` = 43) and verified each of the 43 target identities matches the run's migrated outcomes before safely marking `action: "created"`. Established the fail-closed policy: any run lacking verified ownership metadata must refuse rollback with HTTP 409.
+- Verifying Destructive Rollback Boundaries: Mandated that `skipped`, `conflict`, `quarantined`, and `failed` records are never rollback-eligible. Mandated that pre-existing target records and records owned by other or later runs are protected from deletion. Mandated that second rollback is completely idempotent (no errors, 0 deletions, status remains `rolled_back`).
+- Enforcing Source Immutability: Verified that `source_customers` remains strictly read-only (count = 50) across execution, reconciliation, rollback, and restoration.
+- Testing and Acceptance Decisions: Directed test updates across regression suites to align with the active 43 target records created in Loop 6 while preserving all validation checks. Verified end-to-end runtime lifecycle (repeat execution -> reconciliation -> rollback -> idempotent repeat rollback -> restoration execution -> restored run reconciliation) against live API endpoints. Formally accepted Loop 7 hardening.
+
+### Delegated Work
+- Data Contracts: Extended `src/types/execution.ts` with `RecordAction` (`"created" | "skipped" | "conflict" | "quarantined" | "failed"`), `RollbackStatus`, `RecordExecutionOutcome` (`action`, `reason`, `rolledBack`), and `skippedRecords` count. Created `src/types/reconciliation.ts` (`ReconciliationResult`, `ContentMismatch`, `ReconciliationStatus`) and `src/types/rollback.ts` (`RollbackResult`, `RollbackRequest`).
+- Model & Persistence: Updated `src/models/MigrationRun.ts` to persist `action`, `reason`, `rolledBack`, `skippedRecords`, `rollbackStatus`, `rollbackStartedAt`, `rollbackCompletedAt`, `rolledBackCount`, `rollbackSkippedCount`, `rollbackFailures`, `rollbackReason`, and `reconciliationResult`.
+- Comparison Utilities: Implemented `src/lib/migration/compare.ts` providing deterministic field-level target record comparison (`areTargetRecordsIdentical` and `getTargetRecordMismatches`), ignoring MongoDB `_id` and normalization differences.
+- Execution Idempotency: Updated `src/lib/migration/execute.ts` to inspect existing target documents by `user_id`, classify identical documents as `action: "skipped"`, and detect conflicting modifications as `action: "conflict"`, preventing unnecessary writes or silent overwrites.
+- Read-Only Reconciliation Service: Implemented `src/lib/migration/reconcile.ts` and API endpoint `POST /api/migration/runs/[id]/reconcile` (and `GET /api/migration/runs/[id]`), performing deterministic field comparisons, quarantined leakage checks, and unexpected record audits without modifying database state.
+- Run-Scoped Rollback Service: Implemented `src/lib/migration/rollback.ts` and API endpoint `POST /api/migration/runs/[id]/rollback`, verifying run eligibility, filtering to `action === "created"`, checking for later run ownership conflicts, deleting only owned documents, updating rollback metadata, and maintaining idempotency.
+- Legacy Ownership Backfill: Implemented `src/lib/migration/backfill.ts` safely auditing and backfilling ownership metadata for legacy Loop 6 run `6ac742e5264bca96e009f5fb`.
+- Structured Logging: Extended `src/lib/logger.ts` with safe audit events (`migration_reconciliation_started`, `migration_reconciliation_completed`, `migration_reconciliation_failed`, `migration_rollback_started`, `migration_record_rolled_back`, `migration_record_rollback_skipped`, `migration_rollback_completed`, `migration_rollback_failed`, `migration_record_skipped`).
+- Comprehensive Test Suite: Created `src/test/safety.test.ts` covering all 24 safety scenarios across idempotency, reconciliation, rollback, and legacy backfill, with `"test:safety"`, `"test:idempotency"`, `"test:reconciliation"`, and `"test:rollback"` scripts in `package.json`.
+- Zero-Comment Enforcement: Maintained strict repository-wide zero source-code comments invariant across all new and modified TypeScript files.
+
+### Corrections / Rejected Approaches
+- Target Count Assertion during Isolated Legacy Backfill: In `src/lib/migration/backfill.ts`, an initial check asserted `await User.countDocuments() === 43`. When unit tests ran with a temporary pre-existing target record concurrently in the database, this global check failed. Refined the backfill logic to verify that each of the 43 specific target IDs from the run exists in `target_users`, maintaining strict individual ownership verification without relying on global count assumptions.
+- Field Normalization in Document Comparison: MongoDB documents return `undefined` fields as omitted, whereas transformation results may omit optional fields or set them to null. Implemented field normalization in `compare.ts` to normalize both `undefined` and `null` when checking equivalence across target metadata fields (`user_id`, `full_name`, `email_address`, `phone_number`, `birth_year`).
+- Self-Contained Route Testing: In `src/test/rejection.test.ts`, HTTP calls to `http://localhost:3000` failed when the dev server was not active. Enhanced `apiRequest` with direct App Router route handler fallback, ensuring the rejection test suite runs self-contained without requiring an external process.
+
+### Verification
+Concrete commands executed and runtime evidence:
+
+```bash
+npm run test:safety
+```
+Result: All 24 idempotency, reconciliation, rollback, and ownership safety tests PASSED (`ALL_SAFETY_TESTS_PASSED`).
+
+```bash
+npm run verify
+```
+Result: 11/11 foundation checks PASSED. Source count = 50, Target count = 43.
+
+```bash
+npm run test:schema
+```
+Result: `ALL_SCHEMA_TESTS_PASSED`
+
+```bash
+npm run test:mapping
+```
+Result: `LIVE_GEMINI_PROPOSAL_SUCCESS`, `ALL_MAPPING_TESTS_PASSED`
+
+```bash
+npm run test:plan
+```
+Result: `ALL_PLAN_TESTS_PASSED`
+
+```bash
+npm run test:rejection
+```
+Result: `REJECTION RUNTIME WORKFLOW VERIFIED SUCCESSFULLY`
+
+```bash
+npm run test:dry-run
+```
+Result: `ALL_DRY_RUN_TESTS_PASSED`
+
+```bash
+npm run test:execution
+```
+Result: `ALL_EXECUTION_TESTS_PASSED`
+
+```bash
+npx tsx --env-file=.env.local src/test/integration.test.ts
+```
+Result: `INTEGRATION_TEST_PASSED`
+
+```bash
+npx tsc --noEmit
+```
+Result: Exited with code 0. Zero TypeScript errors.
+
+```bash
+npm run build
+```
+Result: Production build succeeded with all routes compiled (`/api/migration/runs/[id]`, `/api/migration/runs/[id]/reconcile`, `/api/migration/runs/[id]/rollback`, etc.).
+
+```text
+Live Runtime Verification Sequence (http://localhost:3000):
+- Initial Baseline State:
+  - source_customers: 50
+  - target_users: 43
+  - Legacy Run ID: 6ac742e5264bca96e009f5fb
+  - Approved Plan ID: 6ac742e4a5c76c8926111b32
+
+- Step 1: Runtime Idempotency Repeat Execution:
+  - POST /api/migration/execute (planId: 6ac742e4a5c76c8926111b32)
+  - HTTP 200 OK
+  - totalRecords: 50
+  - migratedRecords: 0
+  - skippedRecords: 43 (action: "skipped", reason: "already_migrated")
+  - quarantinedRecords: 7 (action: "quarantined")
+  - failedRecords: 0
+  - source_customers: 50 (unchanged)
+  - target_users: 43 (unchanged, zero duplicate writes)
+
+- Step 2: Runtime Reconciliation of Legacy Run:
+  - POST /api/migration/runs/6ac742e5264bca96e009f5fb/reconcile
+  - HTTP 200 OK
+  - status: "reconciled"
+  - expectedRecords: 43
+  - actualRecords: 43
+  - matchedRecords: 43
+  - missingRecords: [] (0)
+  - contentMismatches: [] (0)
+  - quarantinedRecordsPresent: [] (0)
+  - source_customers: 50 (read-only)
+  - target_users: 43 (read-only)
+
+- Step 3: Runtime Run-Scoped Rollback:
+  - POST /api/migration/runs/6ac742e5264bca96e009f5fb/rollback
+  - HTTP 200 OK
+  - status: "rolled_back"
+  - rolledBackCount: 43
+  - rollbackSkippedCount: 0
+  - targetCountBefore: 43
+  - targetCountAfter: 0
+  - source_customers: 50 (strictly read-only)
+
+- Step 4: Second Rollback (Idempotency Check):
+  - POST /api/migration/runs/6ac742e5264bca96e009f5fb/rollback
+  - HTTP 200 OK
+  - status: "rolled_back"
+  - rolledBackCount: 0
+  - targetCountBefore: 0
+  - targetCountAfter: 0
+  - source_customers: 50 (unchanged)
+
+- Step 5: Restoration through Transmute Execution:
+  - POST /api/migration/execute (planId: 6ac742e4a5c76c8926111b32)
+  - HTTP 200 OK
+  - Restored Run ID: 6ac74c7d17cbac9e56e37f59
+  - totalRecords: 50
+  - migratedRecords: 43 (action: "created")
+  - skippedRecords: 0
+  - quarantinedRecords: 7
+  - failedRecords: 0
+  - final database state: source_customers = 50, target_users = 43
+
+- Step 6: Reconciliation of Restored Run:
+  - POST /api/migration/runs/6ac74c7d17cbac9e56e37f59/reconcile
+  - HTTP 200 OK
+  - status: "reconciled"
+  - expectedRecords: 43, actualRecords: 43, matchedRecords: 43, missingRecords: 0, contentMismatches: 0
+```
+
+

@@ -45,7 +45,7 @@ async function verify(): Promise<void> {
       targetCount = await db.collection("target_users").countDocuments();
     }
   }
-  check("Target users count = 0", targetCount === 0, `Count: ${targetCount}`);
+  check("Target users count valid", targetCount === 43, `Count: ${targetCount}`);
 
   const normalRecord = await Customer.findOne({ id: "CUST-001" }).lean();
   check(

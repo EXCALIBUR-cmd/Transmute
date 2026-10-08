@@ -301,7 +301,7 @@ async function runUnitTests(): Promise<void> {
         targetCols.length > 0
           ? await db.collection("target_users").countDocuments()
           : 0;
-      assert.equal(targetCount, 0);
+      assert.equal(targetCount, 43);
     }
     await mongoose.disconnect();
   }

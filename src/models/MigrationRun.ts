@@ -2,6 +2,7 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 import {
   ExecutionStatus,
   RecordExecutionOutcome,
+  RollbackStatus,
 } from "@/types/execution";
 
 export interface IMigrationRun extends Document {
@@ -11,12 +12,21 @@ export interface IMigrationRun extends Document {
   status: ExecutionStatus;
   totalRecords: number;
   migratedRecords: number;
+  skippedRecords: number;
   quarantinedRecords: number;
   failedRecords: number;
   startedAt: Date;
   completedAt?: Date | null;
   recordResults: RecordExecutionOutcome[];
   error?: string | null;
+  rollbackStatus?: RollbackStatus | null;
+  rollbackStartedAt?: Date | null;
+  rollbackCompletedAt?: Date | null;
+  rolledBackCount?: number;
+  rollbackSkippedCount?: number;
+  rollbackFailures?: string[];
+  rollbackReason?: string | null;
+  reconciliationResult?: unknown;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,8 +45,13 @@ const RecordExecutionOutcomeSubSchema = new Schema(
     sourceId: { type: String, required: true },
     status: {
       type: String,
-      enum: ["migrated", "quarantined", "failed"],
+      enum: ["migrated", "skipped", "quarantined", "failed"],
       required: true,
+    },
+    action: {
+      type: String,
+      enum: ["created", "skipped", "conflict", "quarantined", "failed"],
+      default: null,
     },
     targetId: { type: String, default: null },
     category: {
@@ -47,10 +62,13 @@ const RecordExecutionOutcomeSubSchema = new Schema(
         "target_write_error",
         "duplicate_identity",
         "execution_error",
+        "conflict",
         null,
       ],
       default: null,
     },
+    reason: { type: String, default: null },
+    rolledBack: { type: Boolean, default: false },
     errors: {
       type: [ValidationErrorSubSchema],
       default: [],
@@ -92,6 +110,10 @@ const MigrationRunSchema = new Schema<IMigrationRun>(
       type: Number,
       default: 0,
     },
+    skippedRecords: {
+      type: Number,
+      default: 0,
+    },
     quarantinedRecords: {
       type: Number,
       default: 0,
@@ -115,6 +137,40 @@ const MigrationRunSchema = new Schema<IMigrationRun>(
     },
     error: {
       type: String,
+      default: null,
+    },
+    rollbackStatus: {
+      type: String,
+      enum: ["pending", "rolled_back", "rollback_partial", "rollback_failed", null],
+      default: null,
+      index: true,
+    },
+    rollbackStartedAt: {
+      type: Date,
+      default: null,
+    },
+    rollbackCompletedAt: {
+      type: Date,
+      default: null,
+    },
+    rolledBackCount: {
+      type: Number,
+      default: 0,
+    },
+    rollbackSkippedCount: {
+      type: Number,
+      default: 0,
+    },
+    rollbackFailures: {
+      type: [String],
+      default: [],
+    },
+    rollbackReason: {
+      type: String,
+      default: null,
+    },
+    reconciliationResult: {
+      type: Schema.Types.Mixed,
       default: null,
     },
   },
