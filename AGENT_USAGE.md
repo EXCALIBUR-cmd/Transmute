@@ -161,3 +161,95 @@ Browser Subagent Runtime Verification (http://localhost:3000):
 - Verified target_users count remained 0 throughout.
 - Session recording saved: loop4_ui_demo_1791399248873.webp
 ```
+
+---
+
+## LOOP 5: Deterministic Dry Run & Record Validation
+
+### Delegated Work
+- Defined data contracts in `src/types/dry-run.ts` for `DryRunResult`, `DryRunStatistics`, `QuarantinedRecord`, `ValidTransformedRecord`, and `RecordValidationError`.
+- Implemented deterministic transformation engine in `src/lib/migration/transform.ts` supporting all 9 allowlisted transformations (`identity`, `concat_with_space`, `extract_year`, `trim`, `lowercase`, `uppercase`, `to_string`, `to_number`, `format_date`) with strict calendar validation preventing silent corruption of invalid dates.
+- Implemented target record validation in `src/lib/migration/validator.ts` verifying required fields, expected scalar types, email format, phone format, and birth year bounds.
+- Built dry-run execution engine in `src/lib/migration/dry-run.ts` reading source records in-memory, evaluating approved mapping plans, generating transformed preview records, and categorizing invalid records into quarantine candidates with zero writes to `target_users`.
+- Created read-only API endpoint `POST /api/migration/dry-run` rejecting pending and rejected plans (HTTP 409) and executing approved plans (HTTP 200).
+- Extended structured logging in `src/lib/logger.ts` for dry-run events (`migration_dry_run_started`, `migration_dry_run_completed`, `migration_dry_run_failed`).
+- Created test suite `src/test/dry-run.test.ts` covering 21 test scenarios and added `"test:dry-run"` script to `package.json`.
+
+### Human Engineering Decisions
+- Enforced strict execution boundary: dry run operates exclusively on approved MappingPlan records; AI proposal generation is not called and cannot modify the approved plan.
+- Verified and enforced the zero-target-write invariant: dry run transforms data in-memory and produces a migration preview without writing to `target_users` (`target_users` count remains 0).
+- Confirmed that source data remains strictly read-only (`source_customers` count remains 50).
+- Defined quarantine classification model: surfaced invalid records with field-level error messages and failure categories (`transformation_error`, `missing_required_field`, `type_mismatch`, `format_validation_error`, `schema_violation`).
+- Confirmed that edge-case fixtures (`CUST-041` to `CUST-044`, `CUST-048`, `CUST-049`, `CUST-050`) are properly surfaced and quarantined.
+- Decided to keep frontend scope untouched in this loop to keep changes strictly focused on the backend data engine.
+
+### Corrections / Rejected Approaches
+- Machine-Specific Path Resolution: In previous verification scripts, machine-specific absolute ESM imports were replaced with standard module imports (`import mongoose from "mongoose"`) and executed with `tsx --env-file=.env.local` to maintain platform neutrality.
+- Calendar Date Parsing Precision: Rather than relying on lenient `Date.parse`, strict component checks (`YYYY-MM-DD`, month 1–12, valid days per month) were enforced in `extract_year` so that invalid dates like `1985-13-45` throw a `TransformationError` rather than guessing a date.
+
+### Verification
+Concrete commands executed and runtime evidence:
+
+```bash
+npm run test:dry-run
+```
+Result: All 21 transformation, validation, state boundary, and invariant checks PASSED (`ALL_DRY_RUN_TESTS_PASSED`).
+
+```bash
+npm run verify
+```
+Result: 11/11 foundation checks PASSED. Source count = 50, Target count = 0.
+
+```bash
+npm run test:schema
+```
+Result: `ALL_SCHEMA_TESTS_PASSED`
+
+```bash
+npm run test:mapping
+```
+Result: `LIVE_GEMINI_PROPOSAL_SUCCESS`, `ALL_MAPPING_TESTS_PASSED`
+
+```bash
+npm run test:plan
+```
+Result: `ALL_PLAN_TESTS_PASSED`
+
+```bash
+npm run test:rejection
+```
+Result: `REJECTION RUNTIME WORKFLOW VERIFIED SUCCESSFULLY`
+
+```bash
+npx tsx --env-file=.env.local src/test/integration.test.ts
+```
+Result: `INTEGRATION_TEST_PASSED`
+
+```bash
+npx tsc --noEmit
+```
+Result: Exited with code 0. Zero TypeScript errors.
+
+```bash
+npm run build
+```
+Result: Production build succeeded with `/api/migration/dry-run` compiled.
+
+```text
+Live Runtime Dry-Run Verification (http://localhost:3000):
+- Pre-check: source_customers = 50, target_users = 0
+- Pending plan dry-run: rejected with HTTP 409 Conflict ("Plan is pending approval and cannot be executed in dry run")
+- Rejected plan dry-run: rejected with HTTP 409 Conflict ("Plan was rejected and cannot be executed in dry run")
+- Approved plan dry-run: succeeded with HTTP 200 OK
+- Results:
+  - Total records: 50
+  - Valid records: 43
+  - Invalid records: 7
+  - Quarantine candidates: 7
+  - Transformation failures: 2
+  - Validation failures: 6
+  - CUST-048 quarantined: YES (failedFields: ["birth_year"], category: "transformation_error")
+  - CUST-050 quarantined: YES (failedFields: ["birth_year", "phone_number"], categories: ["transformation_error", "format_validation_error"])
+- Post-check: source_customers = 50, target_users = 0
+```
+
