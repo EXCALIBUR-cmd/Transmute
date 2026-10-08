@@ -528,6 +528,8 @@ Live Runtime Verification Sequence (http://localhost:3000):
 
 ## Loop 8 — Stitch Frontend Implementation
 
+> **Stitch MCP Availability Note**: During the original Loop 8 implementation, the Stitch MCP server was temporarily unavailable due to upstream project permissions (Google Cloud returned 403 PERMISSION_DENIED). Initial implementation proceeded using the canonical Stitch visual design artifacts and screenshots stored in the repository. Once Stitch MCP became available, Loop 8A was executed to perform final side-by-side comparison and fine-grained visual refinement.
+
 ### Delegated Work
 - Implemented the complete Transmute Control Room frontend in Next.js 16 App Router using Vanilla CSS / Tailwind tokens faithfully representing the Stitch visual design system.
 - Created 11 specialized, modular components:
@@ -633,6 +635,58 @@ Live Endpoint Verification against Dev Server (http://localhost:3000):
 - GET /api/migration/runs: HTTP 200 OK (returned 3 historical migration runs)
 - GET /api/migration/runs/6ac74c7d17cbac9e56e37f59: HTTP 200 OK (returned full run outcome details)
 ```
+
+## Loop 8A — Stitch MCP Visual Refinement
+
+### Delegated Work
+- Probed and connected directly to the Stitch MCP endpoint (`https://stitch.googleapis.com/mcp`) using the active configuration key.
+- Performed forensic visual audit against canonical Stitch visual design assets (`pending_review_state_1791399343131.png`, `final_approved_state_1791399401949.png`, and Stitch design tokens).
+- Refined `src/components/Topbar.tsx`:
+  - Added dynamic stage subtitle reflecting active migration phase (`Controlled Migration Workbench · Stage {N}: {Title}`) to match the Stitch design header.
+  - Aligned logo badge sizing (`h-8 w-8 rounded-lg bg-indigo-600`), version pill (`v0.8.0`), and right status pills with bold white counts and emerald target indicators.
+- Refined `src/components/MappingCard.tsx`:
+  - Adjusted source field pill styling (`px-2.5 py-1 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800/60 font-semibold`) and multi-field spacing (`first_name +` in cyan pill, `last_name` in cyan pill).
+  - Aligned arrow (`→` in `text-zinc-600 font-bold`) and target pill styling (`bg-purple-950/80 text-purple-300 border border-purple-800/60`).
+  - Refined transformation strategy tag and confidence badge typography to match the exact Stitch hierarchy.
+  - Formatted recessed rationale container with uppercase `RATIONALE:` header in `text-zinc-500 font-mono text-[11px] uppercase mr-2 tracking-wider font-semibold`.
+- Refined `src/components/ApprovalPanel.tsx`:
+  - Aligned approved state banner to match `final_approved_state_1791399401949.png`: emerald check icon badge (`h-9 w-9 rounded-lg bg-emerald-900/60 border border-emerald-600/50 text-emerald-400`), `APPROVED` status pill, and muted `State Finalized` action marker.
+  - Aligned pending state banner with amber review notification and primary `Approve Mapping` / `Reject Mapping` controls.
+- Refined `src/components/DryRunPanel.tsx`:
+  - Made eligibility and quarantine percentage calculations fully dynamic based on `totalRecords`.
+- Refined `src/app/page.tsx`:
+  - Unified the AI Proposal and Human Approval views into a cohesive workspace matching the Stitch screen layout where approval status, field candidates, risks, and unmapped metrics are co-located without redundant state navigation.
+  - Connected dynamic stage subtitle prop to `Topbar`.
+- Preserved strict repository-wide zero-comment invariant across all components and pages.
+
+### Human Engineering Work
+- Verified that the Stitch MCP endpoint is operational and confirmed the design hierarchy against the visual truth established in Stitch design assets.
+- Directed visual refinements to prioritize real-world migration workflow clarity over cosmetic novelty.
+- Decided to unify the Proposal and Approval view in `page.tsx` to mirror the exact single-screen control room layout generated in Stitch.
+- Verified that no backend migration logic, API routes, or database contracts were modified during the frontend refinement pass.
+- Monitored test execution, type checking, and production build to ensure zero regressions.
+
+### Corrections / Rejected Approaches
+- Redundant Stage Splitting: Initially, stage "02" (AI Proposal) and stage "03" (Human Approval) displayed partially disjoint components, requiring extra navigation clicks. Replaced with the unified layout proven in `final_approved_state_1791399401949.png` where the approval banner, candidate cards, and edge risks are presented together seamlessly.
+- Hardcoded Dry Run Percentages: Detected hardcoded `86.0%` and `14.0%` in `DryRunPanel.tsx` scorecard labels. Replaced with dynamic math calculations derived from `dryRunResult.validRecords` and `dryRunResult.totalRecords`.
+- Zero-Comment Audit: Enforced zero comments throughout all modified files; verified zero inline comments, block comments, or JSDoc tags.
+
+### Verification
+- Stitch MCP connection and asset inspection: confirmed design tokens and layout composition.
+- TypeScript compiler: `npx tsc --noEmit` exited with code 0 (0 errors).
+- Production build: `npm run build` completed successfully in Turbopack. All 14 App Router routes compiled.
+- Backend regression test suite:
+  - `npm run test:schema`: PASS
+  - `npm run test:mapping`: PASS (Live Gemini Flash proposal)
+  - `npm run test:plan`: PASS (14/14 tests)
+  - `npm run test:rejection`: PASS (runtime rejection workflow)
+  - `npm run test:dry-run`: PASS
+  - `npm run test:execution`: PASS (idempotent execution, 43 skipped, 7 quarantined)
+  - `npm run test:safety`: PASS (reconciliation and rollback safety)
+  - `npx tsx --env-file=.env.local src/test/integration.test.ts`: PASS (`INTEGRATION_TEST_PASSED`)
+  - `npm run verify`: PASS (50 source customers, 43 target users, 0 duplicates)
+- Zero-comment audit: `grep -r -E '(\/\*|\*\/|\/\/|TODO|FIXME)' src/` returned 0 matches.
+
 
 
 

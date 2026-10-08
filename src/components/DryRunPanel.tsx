@@ -137,7 +137,11 @@ export const DryRunPanel: React.FC<DryRunPanelProps> = ({
                 Valid / Ready
               </span>
               <span className="text-xl font-bold text-emerald-300">{dryRunResult.validRecords}</span>
-              <span className="text-[11px] text-emerald-400/70">86.0% eligible</span>
+              <span className="text-[11px] text-emerald-400/70">
+                {dryRunResult.totalRecords > 0
+                  ? ((dryRunResult.validRecords / dryRunResult.totalRecords) * 100).toFixed(1)
+                  : "0.0"}% eligible
+              </span>
             </div>
 
             <div className="p-4 rounded-xl border border-amber-900/40 bg-amber-950/20 flex flex-col gap-1">
@@ -145,7 +149,11 @@ export const DryRunPanel: React.FC<DryRunPanelProps> = ({
                 Quarantined
               </span>
               <span className="text-xl font-bold text-amber-300">{dryRunResult.invalidRecords}</span>
-              <span className="text-[11px] text-amber-400/70">14.0% isolated</span>
+              <span className="text-[11px] text-amber-400/70">
+                {dryRunResult.totalRecords > 0
+                  ? ((dryRunResult.invalidRecords / dryRunResult.totalRecords) * 100).toFixed(1)
+                  : "0.0"}% isolated
+              </span>
             </div>
 
             <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/50 flex flex-col gap-1">

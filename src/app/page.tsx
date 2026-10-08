@@ -367,11 +367,26 @@ export default function Home() {
   const isPlanApproved = activePlan?.status === "approved";
   const activeRunId = executionResult?.runId || (selectedRun ? String(selectedRun._id) : null);
 
+  const stageSubtitles: Record<WorkflowStageKey, string> = {
+    schema: "Controlled Migration Workbench · Stage 1: Schema Inspection & Structural Comparison",
+    proposal: isPlanApproved
+      ? "Controlled Migration Workbench · Stage 4: Human Review & Approval (Approved)"
+      : "Controlled Migration Workbench · Stage 4: Human Review & Approval (Pending Review)",
+    approval: isPlanApproved
+      ? "Controlled Migration Workbench · Stage 4: Human Review & Approval (Approved)"
+      : "Controlled Migration Workbench · Stage 4: Human Review & Approval (Pending Review)",
+    dryrun: "Controlled Migration Workbench · Stage 5: Deterministic Dry Run & Quarantine",
+    execution: "Controlled Migration Workbench · Stage 6: Deterministic Migration Execution",
+    reconciliation: "Controlled Migration Workbench · Stage 7: Target State Reconciliation",
+    recovery: "Controlled Migration Workbench · Stage 8: Run-Scoped Recovery & Rollback",
+  };
+
   return (
     <div className="min-h-screen bg-[#090b10] text-zinc-100 flex flex-col font-sans selection:bg-indigo-500/30 selection:text-indigo-200">
       <Topbar
         sourceCount={sourceCustomerCount}
         targetCount={targetUserCount}
+        subtitle={stageSubtitles[currentStage]}
         onRefresh={refreshAll}
         isRefreshing={isRefreshing}
       />
@@ -434,14 +449,14 @@ export default function Home() {
           />
         )}
 
-        {currentStage === "proposal" && (
+        {(currentStage === "proposal" || currentStage === "approval") && (
           <section className="flex flex-col gap-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-300">
-                  2. AI Mapping Proposal Engine
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-200">
+                  2. AI Mapping Proposal & Review
                 </h2>
-                <span className="text-xs text-zinc-500 font-mono">Semantic candidate reasoning</span>
+                <span className="text-xs text-zinc-500 font-mono">Semantic reasoning candidate</span>
               </div>
               <button
                 type="button"
@@ -490,47 +505,6 @@ export default function Home() {
             )}
 
             {!isGeneratingProposal && activePlan && (
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-3">
-                  <h3 className="text-xs font-mono uppercase tracking-wider text-zinc-400">
-                    Candidate Field Mappings ({activePlan.proposal.mappings.length})
-                  </h3>
-                  <div className="flex flex-col gap-3">
-                    {activePlan.proposal.mappings.map((m) => (
-                      <MappingCard key={m.targetField} mapping={m} />
-                    ))}
-                  </div>
-                </div>
-
-                <RiskPanel risks={activePlan.proposal.risks} />
-
-                <div className="flex justify-end pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setCurrentStage("approval")}
-                    className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition-colors shadow-md shadow-indigo-600/20 flex items-center gap-1.5"
-                  >
-                    <span>Proceed to Human Review & Approval</span>
-                    <span>→</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </section>
-        )}
-
-        {currentStage === "approval" && (
-          <section className="flex flex-col gap-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-300">
-                  3. Human Approval Layer
-                </h2>
-                <span className="text-xs text-zinc-500 font-mono">Explicit trust boundary</span>
-              </div>
-            </div>
-
-            {activePlan ? (
               <div className="flex flex-col gap-6">
                 <ApprovalPanel
                   plan={activePlan}
@@ -542,7 +516,7 @@ export default function Home() {
 
                 <div className="flex flex-col gap-3">
                   <h3 className="text-xs font-mono uppercase tracking-wider text-zinc-400">
-                    Reviewed Field Mappings ({activePlan.proposal.mappings.length})
+                    Field-to-Field Mapping Candidates ({activePlan.proposal.mappings.length})
                   </h3>
                   <div className="flex flex-col gap-3">
                     {activePlan.proposal.mappings.map((m) => (
@@ -553,22 +527,87 @@ export default function Home() {
 
                 <RiskPanel risks={activePlan.proposal.risks} />
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+                  <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/30 p-3">
+                    <span className="text-zinc-500 uppercase text-[10px] block mb-1 font-semibold">
+                      Unmapped Source Fields
+                    </span>
+                    {activePlan.proposal.unmappedSourceFields.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {activePlan.proposal.unmappedSourceFields.map((f) => (
+                          <span key={f} className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">
+                            {f}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-zinc-600">None (all source fields accounted for)</span>
+                    )}
+                  </div>
+
+                  <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/30 p-3">
+                    <span className="text-zinc-500 uppercase text-[10px] block mb-1 font-semibold">
+                      Unmapped Target Fields
+                    </span>
+                    {activePlan.proposal.unmappedTargetFields.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {activePlan.proposal.unmappedTargetFields.map((f) => (
+                          <span key={f} className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">
+                            {f}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-zinc-600">None (all target fields accounted for)</span>
+                    )}
+                  </div>
+                </div>
+
+                {recentPlans.length > 1 && (
+                  <div className="border-t border-zinc-800/80 pt-4 flex flex-col gap-2">
+                    <span className="text-xs font-mono uppercase text-zinc-500 font-semibold">
+                      Persisted Plan History ({recentPlans.length})
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {recentPlans.map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => setActivePlan(p)}
+                          className={`px-3 py-1.5 rounded-lg border text-xs font-mono transition-colors flex items-center gap-2 ${
+                            activePlan.id === p.id
+                              ? "bg-zinc-800 border-indigo-500/60 text-white"
+                              : "bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-zinc-200"
+                          }`}
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${
+                              p.status === "approved"
+                                ? "bg-emerald-400"
+                                : p.status === "rejected"
+                                ? "bg-rose-400"
+                                : "bg-amber-400"
+                            }`}
+                          />
+                          <span>{p.id.slice(-6)}</span>
+                          <span className="text-[10px] uppercase text-zinc-500">[{p.status}]</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {isPlanApproved && (
                   <div className="flex justify-end pt-2">
                     <button
                       type="button"
                       onClick={() => setCurrentStage("dryrun")}
-                      className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition-colors shadow-md shadow-emerald-600/20 flex items-center gap-1.5"
+                      className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition-colors shadow-md shadow-emerald-600/20 flex items-center gap-2 font-mono"
                     >
                       <span>Proceed to Deterministic Dry Run</span>
                       <span>→</span>
                     </button>
                   </div>
                 )}
-              </div>
-            ) : (
-              <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-8 text-center text-xs text-zinc-500 font-mono">
-                No active plan selected for review. Generate an AI mapping proposal first.
               </div>
             )}
           </section>

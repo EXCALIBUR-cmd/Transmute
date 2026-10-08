@@ -31,33 +31,33 @@ export const ApprovalPanel: React.FC<ApprovalPanelProps> = ({
   const isRejected = plan.status === "rejected";
 
   let containerStyles = "border-amber-500/40 bg-amber-950/20";
-  let iconBadge = "bg-amber-500/20 text-amber-400 border-amber-500/30";
+  let iconBadge = "bg-amber-900/60 border-amber-600/50 text-amber-300";
   let iconText = "!";
 
   if (isApproved) {
     containerStyles = "border-emerald-500/40 bg-emerald-950/20";
-    iconBadge = "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
+    iconBadge = "bg-emerald-900/60 border-emerald-600/50 text-emerald-400";
     iconText = "✓";
   } else if (isRejected) {
     containerStyles = "border-rose-500/40 bg-rose-950/20";
-    iconBadge = "bg-rose-500/20 text-rose-400 border-rose-500/30";
+    iconBadge = "bg-rose-900/60 border-rose-600/50 text-rose-400";
     iconText = "✕";
   }
 
   return (
     <div className="flex flex-col gap-4">
       <div
-        className={`rounded-xl border p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm ${containerStyles}`}
+        className={`rounded-xl border p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs ${containerStyles}`}
       >
-        <div className="flex items-start gap-4">
+        <div className="flex items-center gap-3.5">
           <div
-            className={`h-10 w-10 rounded-lg flex items-center justify-center font-bold text-lg border ${iconBadge}`}
+            className={`h-9 w-9 rounded-lg flex items-center justify-center font-bold text-base border select-none shrink-0 ${iconBadge}`}
           >
             {iconText}
           </div>
           <div>
-            <div className="flex items-center gap-2.5">
-              <span className="font-semibold text-base text-zinc-100">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-sm text-zinc-100">
                 {isApproved
                   ? "Mapping Plan Approved"
                   : isRejected
@@ -67,17 +67,17 @@ export const ApprovalPanel: React.FC<ApprovalPanelProps> = ({
               <StatusBadge status={plan.status} size="sm" />
             </div>
 
-            <p className="text-xs text-zinc-300 mt-1">
+            <p className="text-xs text-zinc-400 mt-0.5">
               {isApproved
-                ? "Plan approved by human engineer. Proposal is locked. Migration execution remains a separate deterministic step."
+                ? "Plan approved by human engineer. Proposal is locked. Migration execution is deferred."
                 : isRejected
                 ? `Plan rejected: ${plan.rejectionReason || "No explicit reason specified."}`
                 : "Review confidence scores and edge risks below. Explicit human approval is required before execution can occur."}
             </p>
 
-            <div className="text-[11px] font-mono text-zinc-400 mt-2 flex flex-wrap gap-4">
+            <div className="text-[11px] font-mono text-zinc-500 mt-1 flex flex-wrap gap-4">
               <span>
-                Plan ID: <code className="text-zinc-200">{plan.id}</code>
+                ID: <code className="text-zinc-300">{plan.id}</code>
               </span>
               <span>Created: {new Date(plan.createdAt).toLocaleString()}</span>
               {plan.reviewedAt && (
@@ -87,14 +87,14 @@ export const ApprovalPanel: React.FC<ApprovalPanelProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 shrink-0">
           {isPending && (
             <>
               <button
                 type="button"
                 onClick={() => setShowRejectDialog(true)}
                 disabled={isRejecting || isApproving}
-                className="px-4 py-2 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-700/60 text-rose-200 font-medium text-xs transition-colors disabled:opacity-50"
+                className="px-3.5 py-1.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-700/60 text-rose-200 font-medium text-xs transition-colors disabled:opacity-50"
               >
                 {isRejecting ? "Rejecting..." : "Reject Mapping"}
               </button>
@@ -103,7 +103,7 @@ export const ApprovalPanel: React.FC<ApprovalPanelProps> = ({
                 type="button"
                 onClick={onApprove}
                 disabled={isApproving || isRejecting}
-                className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition-colors shadow-md shadow-emerald-600/20 disabled:opacity-50 flex items-center gap-1.5"
+                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition-colors shadow-md shadow-emerald-600/20 disabled:opacity-50 flex items-center gap-1.5"
               >
                 {isApproving ? (
                   <>
@@ -121,7 +121,7 @@ export const ApprovalPanel: React.FC<ApprovalPanelProps> = ({
           )}
 
           {!isPending && (
-            <div className="text-xs font-mono px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400">
+            <div className="text-xs font-mono px-3 py-1.5 rounded-lg bg-zinc-900/90 border border-zinc-750 text-zinc-400 select-none">
               State Finalized
             </div>
           )}
